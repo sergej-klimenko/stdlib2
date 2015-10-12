@@ -8,11 +8,7 @@
 -define(__PRELUDE_HRL, true).
 
 %%%_* Assertions =======================================================
--define(hence(A),
-        (case A of
-           true -> ok;
-           _    -> throw({error, {assert, {??A, '=', true}, ?FILE, ?LINE}})
-         end)).
+-define(hence(A), true = A).
 
 -define(given(A, B),
         (case ((not (A)) orelse (B)) of
