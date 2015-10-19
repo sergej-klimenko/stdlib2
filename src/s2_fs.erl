@@ -3,10 +3,15 @@
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%_* Module declaration ===============================================
 -module(s2_fs).
 
-%%%_* Exports ==========================================================
+-include("prelude.hrl").
+-include_lib("eunit/include/eunit.hrl").
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Exports
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 -export([ read/1
         , write/2
         ]).
@@ -33,12 +38,11 @@
 -export([ sha1/1
         ]).
 
-%%%_* Includes =========================================================
--include("prelude.hrl").
--include_lib("eunit/include/eunit.hrl").
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Public API
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%_* Code =============================================================
-%%%_ * read/write ------------------------------------------------------
+%% = read/write ===============================================================
 -spec read(file())     -> _ | undefined.
 read(File)             -> case file:read_file(File) of
                             {ok, Bin}       -> ?b2t(Bin);
@@ -49,14 +53,7 @@ read(File)             -> case file:read_file(File) of
 write(File, Term)      -> ok = file:write_file(File, ?t2b(Term)),
                           Term.
 
-read_write_test() ->
-  with_temp_file(fun(F) ->
-    foo = write(F, foo),
-    foo = read(F)
-  end),
-  undefined = read("nosuchfile").
-
-%%%_ * with_fd ---------------------------------------------------------
+%% = with_fd ==================================================================
 -spec with_fd(file(), fun((fd()) -> A)) -> A.
 %% @doc
 with_fd(File, F) ->
@@ -65,11 +62,100 @@ with_fd(File, F) ->
   after file:close(FD)
   end.
 
-
 -spec with_fds([file()], fun(([fd()]) -> A)) -> A.
 %% @doc
 with_fds(Files, F) -> s2_funs:unwind_with(fun with_fd/2, Files, F).
 
+%% = with_temp_fd =============================================================
+
+-spec with_temp_fd(fun(({file(), fd()}) -> A)) -> A.
+%% @doc
+with_temp_fd(F) ->
+  with_temp_fd("with_temp_fd", F).
+with_temp_fd(Prefix, F) ->
+  File     = s2_sh:mktemp_u(Prefix),
+  {ok, FD} = file:open(File, [read, write, exclusive]),
+  try F({File, FD})
+  after file:close(FD), file:delete(File)
+  end.
+
+-spec with_temp_fds(pos_integer() | [file()],
+                    fun(([{file(), fd()}]) -> A)) -> A.
+%% @doc
+with_temp_fds(N, F) when is_integer(N) ->
+  with_temp_fds(lists:duplicate(N, "with_temp_fds"), F);
+with_temp_fds(Prefixes, F) when is_list(Prefixes) ->
+  s2_funs:unwind_with(fun with_temp_fd/2, Prefixes, F).
+
+%% = with_temp_file ===========================================================
+
+-spec with_temp_file(fun((file()) -> A)) -> A.
+%% @doc
+with_temp_file(F) ->
+  with_temp_file("with_temp_file", F).
+with_temp_file(Prefix, F) ->
+  File = s2_sh:mktemp(Prefix),
+  try F(File)
+  after file:delete(File)
+  end.
+
+-spec with_temp_files([file()], fun(([file()]) -> A)) -> A.
+%% @doc
+with_temp_files(N, F) when is_integer(N) ->
+  with_temp_files(lists:duplicate(N, "with_temp_files"), F);
+with_temp_files(Prefixes, F) when is_list(Prefixes) ->
+  s2_funs:unwind_with(fun with_temp_file/2, Prefixes, F).
+
+%% = with_temp_dir ============================================================
+
+-spec with_temp_dir(fun((file()) -> A)) -> A.
+%% @doc
+with_temp_dir(F) ->
+  with_temp_dir("with_temp_dir", F).
+with_temp_dir(Prefix, F) ->
+  File = s2_sh:mktemp_d(Prefix),
+  try F(File)
+  after s2_sh:rm_rf(File)
+  end.
+
+-spec with_temp_dirs([file()], fun(([file()]) -> A)) -> A.
+%% @doc
+with_temp_dirs(N, F) when is_integer(N) ->
+  with_temp_dirs(lists:duplicate(N, "with_temp_dirs"), F);
+with_temp_dirs(Prefixes, F) when is_list(Prefixes) ->
+  s2_funs:unwind_with(fun with_temp_dir/2, Prefixes, F).
+
+%% = sha1 =====================================================================
+
+-define(sha1_blocksize, 32768).
+
+sha1(File) ->
+  case file:open(File, [binary,raw,read]) of
+    {ok, FD}         -> sha1_loop(FD, crypto:hash_init(sha));
+    {error, _} = Err -> Err
+  end.
+
+sha1_loop(FD, Ctx) ->
+  case file:read(FD, ?sha1_blocksize) of
+    {ok, Bin}        -> sha1_loop(FD, crypto:hash_update(Ctx, Bin));
+    {error, _} = Err -> Err;
+    eof ->
+      ok = file:close(FD),
+      {ok, crypto:hash_final(Ctx)}
+  end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Tests
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-ifdef(TEST).
+
+read_write_test() ->
+  with_temp_file(fun(F) ->
+    foo = write(F, foo),
+    foo = read(F)
+  end),
+  undefined = read("nosuchfile").
 
 with_fds_ok_test() ->
   with_temp_files(2, fun([F1, F2]) ->
@@ -92,32 +178,10 @@ with_fds_error_test() ->
     {'EXIT', _} = (catch with_fds([F1, F2], fun(_) -> ok end))
   end).
 
-%%%_ * with_temp_fd ----------------------------------------------------
--spec with_temp_fd(fun(({file(), fd()}) -> A)) -> A.
-%% @doc
-with_temp_fd(F) ->
-  with_temp_fd("with_temp_fd", F).
-with_temp_fd(Prefix, F) ->
-  File     = s2_sh:mktemp_u(Prefix),
-  {ok, FD} = file:open(File, [read, write, exclusive]),
-  try F({File, FD})
-  after file:close(FD), file:delete(File)
-  end.
-
 with_temp_fd_test() ->
   ok = with_temp_fd(fun({_, FD}) ->
     file:write(FD, "foo")
   end).
-
-
--spec with_temp_fds(pos_integer() | [file()],
-                    fun(([{file(), fd()}]) -> A)) -> A.
-%% @doc
-with_temp_fds(N, F) when is_integer(N) ->
-  with_temp_fds(lists:duplicate(N, "with_temp_fds"), F);
-with_temp_fds(Prefixes, F) when is_list(Prefixes) ->
-  s2_funs:unwind_with(fun with_temp_fd/2, Prefixes, F).
-
 
 with_temp_fds_ok_test() ->
   with_temp_fds(2, fun([{_, FD1}, {_, FD2}]) ->
@@ -133,26 +197,6 @@ with_temp_fds_error_test() ->
   false = filelib:is_file(F1),
   false = filelib:is_file(F2).
 
-%%%_ * with_temp_file --------------------------------------------------
--spec with_temp_file(fun((file()) -> A)) -> A.
-%% @doc
-with_temp_file(F) ->
-  with_temp_file("with_temp_file", F).
-with_temp_file(Prefix, F) ->
-  File = s2_sh:mktemp(Prefix),
-  try F(File)
-  after file:delete(File)
-  end.
-
-
--spec with_temp_files([file()], fun(([file()]) -> A)) -> A.
-%% @doc
-with_temp_files(N, F) when is_integer(N) ->
-  with_temp_files(lists:duplicate(N, "with_temp_files"), F);
-with_temp_files(Prefixes, F) when is_list(Prefixes) ->
-  s2_funs:unwind_with(fun with_temp_file/2, Prefixes, F).
-
-
 with_temp_files_ok_test() ->
   with_temp_files(2, fun([F1, F2]) ->
     {ok, _} = file:open(F1, [read]),
@@ -164,25 +208,6 @@ with_temp_files_error_test() ->
     (catch with_temp_files(2, fun([F1, F2]) -> throw({F1, F2}) end)),
   false = filelib:is_file(F1),
   false = filelib:is_file(F2).
-
-%%%_ * with_temp_dir ---------------------------------------------------
--spec with_temp_dir(fun((file()) -> A)) -> A.
-%% @doc
-with_temp_dir(F) ->
-  with_temp_dir("with_temp_dir", F).
-with_temp_dir(Prefix, F) ->
-  File = s2_sh:mktemp_d(Prefix),
-  try F(File)
-  after s2_sh:rm_rf(File)
-  end.
-
--spec with_temp_dirs([file()], fun(([file()]) -> A)) -> A.
-%% @doc
-with_temp_dirs(N, F) when is_integer(N) ->
-  with_temp_dirs(lists:duplicate(N, "with_temp_dirs"), F);
-with_temp_dirs(Prefixes, F) when is_list(Prefixes) ->
-  s2_funs:unwind_with(fun with_temp_dir/2, Prefixes, F).
-
 
 with_temp_dirs_ok_test() ->
   with_temp_dirs(2, fun([F1, F2]) ->
@@ -196,25 +221,4 @@ with_temp_dirs_error_test() ->
   false = filelib:is_dir(F1),
   false = filelib:is_dir(F2).
 
-%%%_ * sha1 -------------------------------------------------------------
--define(sha1_blocksize, 32768).
-sha1(File) ->
-  case file:open(File, [binary,raw,read]) of
-    {ok, FD}         -> sha1_loop(FD, crypto:hash_init(sha));
-    {error, _} = Err -> Err
-  end.
-
-sha1_loop(FD, Ctx) ->
-  case file:read(FD, ?sha1_blocksize) of
-    {ok, Bin}        -> sha1_loop(FD, crypto:hash_update(Ctx, Bin));
-    {error, _} = Err -> Err;
-    eof ->
-      ok = file:close(FD),
-      {ok, crypto:hash_final(Ctx)}
-  end.
-
-%%%_* Emacs ============================================================
-%%% Local Variables:
-%%% allout-layout: t
-%%% erlang-indent-level: 2
-%%% End:
+-endif.

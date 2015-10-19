@@ -3,10 +3,15 @@
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%_* Module declaration ===============================================
 -module(s2_par).
 
-%%%_* Exports ==========================================================
+-include("prelude.hrl").
+-include_lib("eunit/include/eunit.hrl").
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Exports
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 -export([ map/2
         , map/3
         ]).
@@ -14,16 +19,18 @@
 -export_type([ opt/0
              ]).
 
-%%%_* Includes =========================================================
--include("prelude.hrl").
--include_lib("eunit/include/eunit.hrl").
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Types
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-%%%_* Code =============================================================
-%%%_ * API -------------------------------------------------------------
 -type opt() :: {timeout,   non_neg_integer()}
              | {errors,    boolean()}
              | {workers,   non_neg_integer()}
              | {chunksize, non_neg_integer()}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Public API
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -spec map(fun((A) -> B), [A]) -> maybe([maybe(B, _) | B], _).
 %% @doc map(F, Xs) is the result of mapping F over Xs in parallel.
@@ -52,7 +59,12 @@ map(F, Xs, Opts) ->
       {error, timeout}
   end.
 
-%%%_ * Supervisor ------------------------------------------------------
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Internal Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% @private
+%% -- Supervisor ---------------------------------------------------------------
 %% We want to be able to propagate failure to our workers, so we need to
 %% link to them. We can't simply link from the calling process, since it
 %% may not be trapping exits. Thusly, the middleman.
@@ -78,7 +90,7 @@ middleman(Errors, Parent, Monitor, Pids, Acc) ->
           s2_procs:send(Parent, {error, {worker, untag(Errs)}}),
           exit(worker)
       end;
-    %% Woker failure
+    %% Worker failure
     {'EXIT', Pid, Rsn} ->
       case Rsn of
         normal ->
@@ -97,16 +109,17 @@ middleman(Errors, Parent, Monitor, Pids, Acc) ->
 
 untag(Tagged) -> [Body || {_Tag, Body} <- Tagged].
 
-%%%_ * Workers ---------------------------------------------------------
+%% -- Workers -----------------------------------------------------------------
+%% @private
 spawn_workers(F, Xs, Workers, ChunkSize) ->
   Self   = self(),
   Chunks = chunk(Xs, Workers, ChunkSize),
   [proc_lib:spawn_link(?thunk(worker(F, C, Self))) || C <- Chunks].
 
 worker(F, Chunk, Parent) ->
-  s2_procs:send(Parent, [?lift(F(X)) || X <- Chunk]).
+    s2_procs:send(Parent, [?lift(F(X)) || X <- Chunk]).
 
-%%%_ * Chunking --------------------------------------------------------
+%% -- Chunking ----------------------------------------------------------------
 chunk(Xs, Workers, ChunkSize)
   when is_integer(Workers)
      , is_integer(ChunkSize)
@@ -131,7 +144,10 @@ chunks(W,      C,        L)            -> max(chunks(W,0,L), chunks(0,C,L)).
 divide(N, M) when N rem M =:= 0 -> N div M;
 divide(N, M) when N rem M =/= 0 -> N div M + 1.
 
-%%%_* Tests ============================================================
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Tests
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 -ifdef(TEST).
 
 basic_test() ->
@@ -181,9 +197,3 @@ parent_down_test() ->
   timer:sleep(100).
 
 -endif.
-
-%%%_* Emacs ============================================================
-%%% Local Variables:
-%%% allout-layout: t
-%%% erlang-indent-level: 2
-%%% End:
