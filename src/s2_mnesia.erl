@@ -1,9 +1,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% @doc Batches
+%%% @doc Mnesia Utils.
 %%% @end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--module(s2_batch).
+-module(s2_mnesia).
 
 -include("prelude.hrl").
 -include_lib("eunit/include/eunit.hrl").
@@ -24,18 +24,18 @@ foldl(Fun, Acc0, List, Opts) when is_list(List) ->
   {_, Xs, Acc} = lists:foldl(BatchFun, {1, [], Acc0}, List),
   case Xs of
     [] -> Acc;
-    _  -> apply(Fun, Xs, Acc)
+    _  -> apply(Fun, [Xs, Acc])
   end;
 foldl(Fun, Acc0, Table, Opts) when is_atom(Table) ->
   BatchFun = batch(Fun, Opts),
   {_, Xs, Acc} = 
     mnesia:activity(
-      transaction,
+      async_dirty,
       ?thunk(mnesia:foldl(BatchFun, {1, [], Acc0}, Table))
      ),
   case Xs of
     [] -> Acc;
-    _  -> apply(Fun, Xs, Acc)
+    _  -> apply(Fun, [Xs, Acc])
   end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

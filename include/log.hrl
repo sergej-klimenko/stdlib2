@@ -42,12 +42,26 @@
            %% need to wrap the result in 'ok' to be able to
            %% detect an unhandled exception.
            {__TIME, __RESULT} =
-             timer:tc(erlang, apply, [fun() -> {ok, Expr} end, []]),
-             ?INFO("time(~s): ~18.3fms ~999p~n"
-                   , [?MODULE, __TIME/1000, Tag] ),
+           timer:tc(erlang, apply, [fun() -> {ok, Expr} end, []]),
+           ?INFO("(~s): ~999p [~B ms]",
+                 [?MODULE, Tag, trunc(__TIME/1000)]),
            case __RESULT of
              {ok, _}         -> element(2, __RESULT);
              {'EXIT', Error} -> exit(Error)
+           end
+         end)()).
+
+-define(TIME(Expr),
+        (fun() ->
+           {__TIME, __RESULT} =
+           timer:tc(erlang, apply, [fun() -> {ok, Expr} end, []]),
+           case __RESULT of
+             {ok, [__TAG | __RES]} ->
+               ?INFO(lists:flatten(["(~s): ", __TAG, " [~B ms]"]),
+                     lists:append([[?MODULE], __RES, [trunc(__TIME/1000)]])), 
+               __RES;
+             {'EXIT', Error} ->
+               exit(Error)
            end
          end)()).
 

@@ -21,6 +21,7 @@
         , to_bool/1
         , unlift/1
         , unlift/2
+        , partition/1
         ]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -28,7 +29,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -spec do([fun()])                            -> maybe(_, _).
-%% @doc doc(Fs) is the result of chaining Fs inside the maybe monad.
+%% @doc do(Fs) is the result of chaining Fs inside the maybe monad.
 do([F|Fs])                                   -> do(Fs, lift(F)).
 do([],     X)                                -> X;
 do(_,      {error, Rsn})                     -> {error, Rsn};
@@ -78,7 +79,13 @@ reduce(F, Acc0, Xs) ->
 -spec to_bool(maybe(_, _)) -> boolean().
 %% @doc to_bool(X) is the boolean representation of the maybe-value X.
 to_bool({ok, _})           -> true;
-to_bool({error, _})        -> false.
+to_bool({error, _})        -> false;
+to_bool(true)              -> true;
+to_bool(false)             -> false;
+to_bool(_)                 -> true.
+
+partition(Xs) when is_list(Xs) ->
+  lists:partition(fun to_bool/1, Xs).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Tests

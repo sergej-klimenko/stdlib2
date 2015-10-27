@@ -91,6 +91,8 @@
 
 -define(is_thunk(X), is_function(X, 0)).
 
+-define(is_rec(X, R), (element(1,X) == R)).
+
 %% = Types ====================================================================
 
 -type alist(A, B) :: [{A, B}].

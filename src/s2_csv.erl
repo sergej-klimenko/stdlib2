@@ -62,7 +62,7 @@ read_string_with(String, RowFun, InitState, Opts) ->
 %% @doc Write records to file in specified format (csv or native)
 write_records(IoDevice, Records, Opts)
   when is_pid(IoDevice) ->
-    write_records_with(IoDevice, all_rows(Records), Opts, 0);
+    write_records_with(IoDevice, all_rows(Records), 0, Opts);
 write_records(File, Records, Opts) ->
   s2_fs:with_fd(
     File,
@@ -77,9 +77,10 @@ write_records_with(IoDevice, RecordFun, InitState, Opts)
     Fields = s2_lists:assoc(Opts, fields, []),
     Format = s2_lists:assoc(Opts, format, csv),
     RowFun = fun(S) ->
-                     {R, NS} = apply(RecordFun, [S]),
-                     F = record_to_row(Record, Fields),
-                     {lists:map(F, R), NS}
+                 {R, NS} = apply(RecordFun, [S]),
+                 ?INFO("~p", [R]),
+                 F = record_to_row(Record, Fields),
+                 {lists:map(F, R), NS}
              end,
     TermFun = fun(S) -> apply(RecordFun, [S]) end,
     case Format of
@@ -231,7 +232,7 @@ all_rows(Rows) ->
     end.
 
 record_to_row([], _) ->
-    fun(R) -> tl(tuple_to_list(R)) end;
+  fun(R) -> R end;
 record_to_row(_, []) ->
     fun(R) -> tl(tuple_to_list(R)) end;
 record_to_row(Record, Fields)
@@ -258,10 +259,14 @@ row(Row) when is_list(Row) ->
     S = string:sub_string(S0, 1, length(S0)),
     list_to_binary(io_lib:format(string:concat(S,"~n"), Vs)).
 
+field(undefined) -> {"~s",""};
+field([]) -> {"~s",""};
 field(F) when is_integer(F) -> {"~B", F};
 field(F) when is_float(F) -> field(F, 2);
 field(F) when is_binary(F) -> {"~s", F};
 field(F) when is_list(F) -> {"~s", F};
+field({_,_,_} = F) -> {"~s", s2_date:format_iso8601(F)};
+field({{_,_,_}, {_,_,_}} = F) -> {"~s", s2_date:format_iso8601(F)};
 field(F) -> {"~w", F}.
 
 field(F, N) when is_float(F) -> {"~." ++ integer_to_list(N) ++ "f", F};

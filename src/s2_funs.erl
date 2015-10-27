@@ -15,6 +15,8 @@
         , o/3
         , reduce/1
         , unwind_with/3
+        , filter/3
+        , filters/2
         ]).
 
 %%%_* Includes =========================================================
@@ -95,6 +97,27 @@ unwind_with_test() ->
               end,
   G         = fun(Ys) -> [Y rem 2 || Y <- Ys] end,
   [0, 1, 0] = unwind_with(F, [1, 2, 3], G).
+
+filter(M, F, V) ->
+  fun(X) ->
+      FV = M:F(X),
+      case FV of
+        V -> {true, X};
+        _ -> false
+      end
+  end.
+
+filters([{_, _} | _] = Fs, Vs) ->
+  fun(X) ->
+      lists:foldl(
+        fun (_, false) -> false;
+          (F, {true, Acc}) -> F(Acc);
+          (F, Acc) -> F(Acc)
+        end,
+        X,
+        lists:zipwith(fun({M,F}, V) -> M:F(V) end, Fs, Vs)
+       )
+  end.
 
 %%%_* Emacs ============================================================
 %%% Local Variables:
