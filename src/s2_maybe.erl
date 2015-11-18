@@ -12,29 +12,31 @@
 %% Exports
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--export([ do/1
-        , lift/1
+%% Primitives
+-export([ lift/1
         , lift/2
+        , unlift/1
+        , unlift/2
+        ]).
+
+%% Multi-step evaluation
+-export([ do/1
         , map/2
         , reduce/2
         , reduce/3
+        ]).
+
+%% Values
+-export([ partition/1
         , to_bool/1
-        , unlift/1
-        , unlift/2
-        , partition/1
+        , untag/1
         ]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Public API
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
--spec do([fun()])                            -> maybe(_, _).
-%% @doc do(Fs) is the result of chaining Fs inside the maybe monad.
-do([F|Fs])                                   -> do(Fs, lift(F)).
-do([],     X)                                -> X;
-do(_,      {error, Rsn})                     -> {error, Rsn};
-do([F|Fs], {ok, _}) when is_function(F, 0)   -> do(Fs, lift(F));
-do([F|Fs], {ok, Res}) when is_function(F, 1) -> do(Fs, lift(F, Res)).
+%% = Primitives ===============================================================
 
 -spec lift(fun()) -> maybe(_, _).
 %% @doc lift(F) is the value of F() lifted into the maybe monad.
@@ -63,6 +65,16 @@ unlift(F) ->
 
 unlift(F, X) -> unlift(?thunk(F(X))).
 
+%% = Multi-step evaluation ====================================================
+
+-spec do([fun()])                            -> maybe(_, _).
+%% @doc do(Fs) is the result of chaining Fs inside the maybe monad.
+do([F|Fs])                                   -> do(Fs, lift(F)).
+do([],     X)                                -> X;
+do(_,      {error, Rsn})                     -> {error, Rsn};
+do([F|Fs], {ok, _}) when is_function(F, 0)   -> do(Fs, lift(F));
+do([F|Fs], {ok, Res}) when is_function(F, 1) -> do(Fs, lift(F, Res)).
+
 -spec map(fun(), [_]) -> maybe(_, _).
 %%@doc map(F, Xs) is the result of mapping F over Xs inside the maybe
 %% monad.
@@ -76,6 +88,8 @@ reduce(F, [Acc0|Xs]) ->
 reduce(F, Acc0, Xs) ->
   ?lift(lists:foldl(fun(X, Acc) -> ?unlift(F(X, Acc)) end, Acc0, Xs)).
 
+%% = Values ===================================================================
+
 -spec to_bool(maybe(_, _)) -> boolean().
 %% @doc to_bool(X) is the boolean representation of the maybe-value X.
 to_bool({ok, _})           -> true;
@@ -84,8 +98,18 @@ to_bool(true)              -> true;
 to_bool(false)             -> false;
 to_bool(_)                 -> true.
 
-partition(Xs) when is_list(Xs) ->
-  lists:partition(fun to_bool/1, Xs).
+-spec partition([maybe(A, B)]) -> {[A], [B]}.
+%% @doc Partition a list of values in maybe() into a list of results and
+%% a list of reasons
+partition(Rets) ->
+  {Oks, Errs} = lists:partition(fun to_bool/1, Rets),
+  Untag       = fun({_F, S}) -> S end,
+  {lists:map(Untag, Oks), lists:map(Untag, Errs)}.
+
+-spec untag(maybe(_, _)) -> _ | no_return().
+%% @doc Convert a value in maybe() into a term or an exception.
+untag({ok, Res})         -> Res;
+untag({error, _} = Err)  -> throw(Err).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Tests
@@ -132,3 +156,11 @@ reduce_test() ->
 to_bool_test() ->
   true  = to_bool({ok, foo}),
   false = to_bool({error, foo}).
+
+partition_test() ->
+  {[foo, bar], [baz, quux]} =
+    partition([{ok, foo}, {ok, bar}, {error, baz}, {error, quux}]).
+
+untag_test() ->
+  42          = untag({ok, 42}),
+  {error, 42} = (catch untag({error, 42})).
