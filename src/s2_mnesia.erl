@@ -13,6 +13,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -export([ foldl/4
+        , foldr/4
         ]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -37,6 +38,26 @@ foldl(Fun, Acc0, Table, Opts) when is_atom(Table) ->
     [] -> Acc;
     _  -> apply(Fun, [Xs, Acc])
   end.
+
+foldr(Fun, Acc0, List, Opts) when is_list(List) ->
+  BatchFun = batch(Fun, Opts),
+  {_, Xs, Acc} = lists:foldr(BatchFun, {1, [], Acc0}, List),
+  case Xs of
+    [] -> Acc;
+    _  -> apply(Fun, [Xs, Acc])
+  end;
+foldr(Fun, Acc0, Table, Opts) when is_atom(Table) ->
+  BatchFun = batch(Fun, Opts),
+  {_, Xs, Acc} = 
+    mnesia:activity(
+      async_dirty,
+      ?thunk(mnesia:foldr(BatchFun, {1, [], Acc0}, Table))
+     ),
+  case Xs of
+    [] -> Acc;
+    _  -> apply(Fun, [Xs, Acc])
+  end.
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Private API
