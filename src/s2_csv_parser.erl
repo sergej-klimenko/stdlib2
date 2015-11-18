@@ -154,10 +154,11 @@ do_new_line(State) ->
      current_line = CurrentLine,
      current_value = CurrentValue,
      process_fun = ProcessingFun,
-     process_fun_state = ProcessingFunState
+     process_fun_state = ProcessingFunState,
+     state = PState
     } = State,
-  NewLine = case CurrentValue of
-                  [] -> lists:reverse(CurrentLine);
+  NewLine = case PState of
+                  skip_to_delimiter -> lists:reverse(CurrentLine);
                   _  -> lists:reverse([lists:reverse(CurrentValue) | CurrentLine])
             end,
   {UpdatedOpts, UpdatedProcessingFunState} =

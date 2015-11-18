@@ -78,7 +78,6 @@ write_records_with(IoDevice, RecordFun, InitState, Opts)
     Format = s2_lists:assoc(Opts, format, csv),
     RowFun = fun(S) ->
                  {R, NS} = apply(RecordFun, [S]),
-                 ?INFO("~p", [R]),
                  F = record_to_row(Record, Fields),
                  {lists:map(F, R), NS}
              end,
@@ -162,8 +161,8 @@ batch_fun(B, Fun, State, _) ->
     ({header, H}, {C, _, Rs, Acc0}) ->
       {C, H, Rs, Acc0};
     ({newline, R}, {C, H, Rs, Acc0}) when C==B ->
-      Acc = apply(Fun, [H, [R | Rs], Acc0]),
-      {0, H, [], Acc};
+      Acc = apply(Fun, [H, Rs, Acc0]),
+      {1, H, [R], Acc};
     ({newline, R}, {C, H, Rs, Acc}) ->
       {C + 1, H, [R | Rs], Acc};
     ({eof}, {_, H, Rs, Acc0}) ->
