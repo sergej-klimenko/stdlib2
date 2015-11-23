@@ -156,7 +156,7 @@ batch_fun(Fun, State, Opts) ->
 batch_fun(1, Fun, State, _) ->
   {Fun, State};
 batch_fun(B, Fun, State, _) ->
-  BatchFun = 
+  BatchFun =
   fun
     ({header, H}, {C, _, Rs, Acc0}) ->
       {C, H, Rs, Acc0};
@@ -286,14 +286,14 @@ write_terms0(IoDevice, [Term | Terms])
     io:fwrite(IoDevice, "~n", []),
     write_terms0(IoDevice, Terms);
 
-write_terms0(_, []) -> 
+write_terms0(_, []) ->
     ok.
 
 write_term(IoDevice, Term)
   when is_pid(IoDevice) andalso is_binary(Term) ->
     file:write(IoDevice, Term);
 
-write_term(IoDevice, Term) 
+write_term(IoDevice, Term)
   when is_pid(IoDevice) ->
     io:fwrite(IoDevice, "~p", [Term]).
 
@@ -313,8 +313,8 @@ read_file_with_test() ->
                HR
            end,
   {ok, {Header, Rows}} = read_file_with(
-        "../priv/sample.csv", 
-        GetRow, 
+        "../priv/sample.csv",
+        GetRow,
         {[], []},
         [{header, true}]),
   19 = length(Header),
@@ -325,8 +325,8 @@ read_batch_test() ->
                 {length(Rows), Header, Rows}
             end,
   {ok, {Counter, Header, Rows}} = read_file_with(
-        "../priv/sample.csv", 
-        GetRows, 
+        "../priv/sample.csv",
+        GetRows,
         {0, [], []},
         [{header, true}, {batch, 0}]),
   19 = length(Header),

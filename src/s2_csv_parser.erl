@@ -25,7 +25,7 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% API
--export([ init/2 
+-export([ init/2
         , init/3
         , parse_with_character/2
         , end_parsing/1
@@ -105,7 +105,7 @@ do_ready({char, Char},
   #pstate{
      current_line = CurrentLine,
      current_value = CurrentValue
-    } = State,  
+    } = State,
   State#pstate{
     current_line = [lists:reverse(CurrentValue) | CurrentLine],
     current_value = []
@@ -117,7 +117,7 @@ do_ready({char, Char}, State) when (Char == $\r) ->
   % ignore line feed characters
   State;
 do_ready({char, Char}, State) ->
-  #pstate{current_value = CurrentValue} = State,  
+  #pstate{current_value = CurrentValue} = State,
   State#pstate{current_value = [Char | CurrentValue]}.
 
 do_in_quotes({eof}, State) ->
@@ -148,6 +148,11 @@ do_skip_to_delimiter({char, Char}, State) when (Char == $\n) ->
 do_skip_to_delimiter({char, _}, State) ->
   State.
 
+do_new_line(
+  #pstate{
+     current_line = [],
+     current_value = []
+    } = State) -> State;
 do_new_line(State) ->
   #pstate{
      opts = Opts,
